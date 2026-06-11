@@ -1,6 +1,7 @@
 import os
 import re
 import sqlite3
+import platform
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import pandas as pd
@@ -11,15 +12,18 @@ from PIL import Image
 app = Flask(__name__)
 CORS(app)
 
-# THIS IS CRUCIAL: Point Python to your Tesseract installation!
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+# --- THE CLOUD SHAPESHIFTER ---
+# If you run this on your local Windows machine, it uses this path.
+# If it runs in the cloud (Linux/Docker), it ignores this and uses the cloud scanner.
+if platform.system() == "Windows":
+    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 UPLOAD_FOLDER = 'uploads'
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# --- NEW: DATABASE SETUP ---
+# --- DATABASE SETUP ---
 def init_db():
     conn = sqlite3.connect('tax_ledger.db')
     c = conn.cursor()
@@ -117,7 +121,6 @@ def calculate_tax():
             
         tax_amount = total - net
 
-        # --- NEW: Save directly to SQLite Database ---
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute('''
@@ -126,7 +129,6 @@ def calculate_tax():
         ''', (transaction_type, date, description, comment, round(total, 2), round(net, 2), rate_type, round(tax_amount, 2)))
         conn.commit()
         
-        # Grab the newly created ID to send back to React
         new_id = cursor.lastrowid
         conn.close()
 
@@ -154,7 +156,6 @@ def get_receipts():
     receipts = conn.execute('SELECT * FROM receipts').fetchall()
     conn.close()
     
-    # Convert database rows back to a list of dictionaries for React
     return jsonify([dict(ix) for ix in receipts])
 
 # --- EXCEL EXPORT ENDPOINT ---
@@ -173,4 +174,4 @@ def export_to_excel():
     return jsonify({"message": "Exported successfully to Tax_Report.xlsx"})
 
 if __name__ == '__main__':
-    app.run(port=5000, debug=True)
+    app.run(port=5000, debug=True, host='0.0.0.0')
